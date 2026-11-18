@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_clear_all"
+        android:title="Clear All Records"
+        android:icon="@drawable/ic_delete_24"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_evidence_log"
+        android:title="Evidence Log"
+        android:icon="@drawable/ic_list_24"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_about"
+        android:title="About"
+        app:showAsAction="never" />
+
+</menu>
