@@ -240,16 +240,44 @@ public class MockSyncService {
     }
 
     /**
-     * For CONFLICT resolution: "Keep my version" creates a new operationId and re-queues.
-     * This is a NEW logical operation, not a retry.
+     * Syncs a record in NORMAL mode WITHOUT modifying the record (no new operationId, no state changes).
+     * Used for conflict resolution where the client has already prepared the record with a new operationId
+     * and incremented localVersion. The mock only processes the sync and returns an ACK.
+     * Implements idempotency: same operationId returns stored ack without creating duplicate.
      */
+    public AckResponse syncForcedNormal(ReadingRecord record) throws SyncException {
+        String operationId = record.getOperationId();
+        String recordId = record.getId();
+
+        logger.i(TAG, String.format("[MOCK] SYNC_FORCED_NORMAL operationId=%s recordId=%s",
+                operationId, recordId));
+
+        // IDEMPOTENCY CHECK: If we've seen this operationId before, return stored ack
+        if (operationStore.containsKey(operationId)) {
+            AckResponse storedAck = operationStore.get(operationId);
+            logger.i(TAG, String.format("[MOCK] SYNC_RETRY_DEDUPED operationId=%s recordId=%s serverCount=%d",
+                    operationId, recordId, serverRecords.size()));
+            return storedAck;
+        }
+
+        // Use NORMAL mode logic directly without touching record fields
+        return handleNormalMode(record);
+    }
+
+    /**
+     * For CONFLICT resolution: "Keep my version" - client must prepare record first.
+     * This method is DEPRECATED - use syncForcedNormal after client sets new operationId, localVersion+1, etc.
+     * Kept for backward compatibility with tests.
+     */
+    @Deprecated
     public AckResponse resolveConflictKeepLocal(ReadingRecord record) {
-        // Generate NEW operationId for this resolution
+        // Generate NEW operationId for this resolution (legacy behavior)
         String newOperationId = UUID.randomUUID().toString();
         record.setOperationId(newOperationId);
         record.setAttemptCount(0);
         record.setLastError(null);
         record.setSyncState(ReadingRecord.STATE_PENDING);
+        // Note: legacy behavior does NOT increment localVersion
 
         // Now sync with NORMAL mode logic (force normal for resolution)
         Mode oldMode = currentMode;

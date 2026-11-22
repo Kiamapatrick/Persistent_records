@@ -23,6 +23,8 @@ Each check includes steps, expected result, and evidence column for screenshots/
 
 **Type**: Real observation (Room persistence, process restart)
 
+> **Note**: The `MockSyncService` is in-memory, so after a force-stop the Room records survive but the mock server count resets to 0 and its operationId store is empty. This is expected, not a bug. Real observation = Room data; mock outcome = server count.
+
 ---
 
 ### Check 2: Rejected Input / Failed Write Preserves Draft
@@ -54,13 +56,13 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | Step | Action | Expected Result | Observed / Evidence ID |
 |------|--------|-----------------|------------------------|
 | 3.1 | Set Mock Mode = **LOST_RESPONSE** | Mode shows LOST_RESPONSE | |
-| 3.2 | Save new record (Site="Retry Test", Temp=20) | Timeout error, record state = FAILED | |
-| 3.3 | Note **Mock server record count** | Count = 1 (server committed) | |
-| 3.4 | Tap record to edit, change value to 21, Save | New operationId, state = PENDING | |
-| 3.5 | Set Mock Mode = **NORMAL** | Mode shows NORMAL | |
-| 3.6 | Tap **Sync Pending** | Sync processes both records | |
-| 3.7 | Check **Mock server record count** | **Count = 2** (not 3 - no duplicate for first record) | |
-| 3.8 | Check Evidence Log | `SYNC_LOST_RESPONSE` then `SYNC_RETRY_DEDUPED` then `SYNC_ACK` | |
+| 3.2 | Save a new record (Site="Retry Test", Temperature, 20). Expect "Saved on this device (pending sync)", state PENDING (saving never auto-syncs). | | |
+| 3.3 | Tap **Sync Pending**. Expect state FAILED, attemptCount=1, error "Request timeout (response lost)". Evidence log: `SYNC_LOST_RESPONSE` then `SYNC_TRANSIENT_FAILURE`. | | |
+| 3.4 | Note Mock server record count = 1 (the server committed even though the client saw a timeout). | | |
+| 3.5 | Do NOT edit the record (an edit creates a new operationId and would skip the dedupe). Note the record's operationId. | | |
+| 3.6 | Mock Mode = **NORMAL**, tap **Sync Pending**. | | |
+| 3.7 | Expect ACKNOWLEDGED, serverVersion=1, same operationId as 3.5, server count still 1. | | |
+| 3.8 | Evidence log: `SYNC_LOST_RESPONSE` → `SYNC_TRANSIENT_FAILURE` → `SYNC_RETRY_DEDUPED` → `SYNC_ACK`. (Dedupe is logged by the mock as `[MOCK] SYNC_RETRY_DEDUPED`.) | | |
 
 **Type**: Mock outcome (server behavior verified via count)
 
@@ -86,8 +88,12 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | 4B.3 | Edit same record (change value to 16), Save | New operationId, state = PENDING | |
 | 4B.4 | Tap **Sync Pending** | Conflict dialog appears: "Server has newer version..." | |
 | 4B.5 | Choose **"Keep My Version (New Operation)"** | New sync with NEW operationId, succeeds | |
-| 4B.6 | Verify record state = ACKNOWLEDGED, serverVersion=2 | Updated record acknowledged | |
+| 4B.6 | Verify record state = ACKNOWLEDGED, serverVersion=3 | Updated record acknowledged | |
 | 4B.7 | Check Evidence Log | `SYNC_CONFLICT` then `CONFLICT_RESOLUTION` then `SYNC_ACK` | |
+
+> **Note**: The expected serverVersion after "Keep My Version" is **3**, not 2.
+> Sequence: first ACK = 1, CONFLICT response bumps the mock's server version to 2, the resolved ACK = 3.
+> After resolution, `localVersion` is incremented by 1 and the record has a new `operationId`.
 
 **Type**: Mock outcome (server behavior) + Real observation (UI state)
 
@@ -115,10 +121,11 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | Step | Action | Expected | Evidence |
 |------|--------|----------|----------|
 | 1 | Mock Mode = LOST_RESPONSE | | |
-| 2 | Save record | Timeout, FAILED | `SYNC_LOST_RESPONSE` |
-| 3 | Server count = 1 | | |
-| 4 | Switch to NORMAL, Sync | Retry → stored ACK, no duplicate | `SYNC_RETRY_DEDUPED` |
-| 5 | Server count = 1 | **No increase** | |
+| 2 | Save record | "Saved on this device (pending sync)", state PENDING | |
+| 3 | Tap **Sync Pending** | Timeout, state FAILED | `SYNC_LOST_RESPONSE` → `SYNC_TRANSIENT_FAILURE` |
+| 4 | Server count = 1 | | |
+| 5 | Switch to NORMAL, tap **Sync Pending** | Retry → stored ACK, no duplicate | `SYNC_RETRY_DEDUPED` → `SYNC_ACK` |
+| 6 | Server count = 1 | **No increase** | |
 
 ---
 

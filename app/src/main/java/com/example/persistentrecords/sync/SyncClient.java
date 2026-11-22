@@ -160,17 +160,20 @@ public class SyncClient {
     }
 
     private void handleConflict(ReadingRecord record, MockSyncService.AckResponse ack) {
+        // Capture the client's known server version BEFORE overwriting it
+        int knownServerVersion = record.getServerVersion();
+
         record.setSyncState(ReadingRecord.STATE_CONFLICT);
         record.setServerVersion(ack.serverVersion);
-        record.setLastError(String.format("Conflict: server version %d > local version %d",
-                ack.serverVersion, record.getServerVersion()));
+        record.setLastError(String.format("Conflict: server has v%d, client last saw v%d",
+                ack.serverVersion, knownServerVersion));
         // operationId stays (it's the one that got conflict)
         // attemptCount stays
 
         dao.update(record);
 
-        Log.i(TAG, String.format("SYNC_CONFLICT: operationId=%s recordId=%s serverVersion=%d localVersion=%d",
-                record.getOperationId(), record.getId(), ack.serverVersion, record.getServerVersion()));
+        Log.i(TAG, String.format("SYNC_CONFLICT: operationId=%s recordId=%s serverVersion=%d knownServerVersion=%d localVersion=%d",
+                record.getOperationId(), record.getId(), ack.serverVersion, knownServerVersion, record.getLocalVersion()));
 
         if (callback != null) {
             callback.onRecordConflict(record);
@@ -182,8 +185,9 @@ public class SyncClient {
         record.setAttemptCount(record.getAttemptCount() + 1);
         record.setLastError("Malformed acknowledgement");
         // operationId REUSED (client will retry with same operationId)
-        // But since mock stores the malformed ack, retry will get same malformed ack
-        // This is intentional - shows malformed ack is not success
+        // The mock does NOT store malformed acks in operationStore.
+        // Retrying in NORMAL mode with the same operationId will succeed normally.
+        // This demonstrates that malformed ack is a validation failure, not a server-side persistence.
 
         dao.update(record);
 
@@ -198,14 +202,43 @@ public class SyncClient {
     /**
      * Resolves a conflict by "Keep my version" - creates NEW operationId and re-queues as PENDING.
      * This is a NEW logical operation, not a retry.
+     * Local version is incremented, record is persisted as PENDING before sync starts.
      */
     public void resolveConflictKeepLocal(ReadingRecord record) {
         executor.execute(() -> {
-            MockSyncService.AckResponse ack = mockSyncService.resolveConflictKeepLocal(record);
-            if (mockSyncService.validateAck(ack, record.getOperationId())) {
-                handleSuccess(record, ack);
-            } else {
-                handleMalformedAck(record);
+            // Prepare record for new logical operation BEFORE calling mock
+            String newOperationId = UUID.randomUUID().toString();
+            record.setOperationId(newOperationId);
+            record.setAttemptCount(0);
+            record.setLastError(null);
+            record.setSyncState(ReadingRecord.STATE_PENDING);
+            record.setLocalVersion(record.getLocalVersion() + 1);
+
+            dao.update(record);
+
+            Log.i(TAG, String.format("CONFLICT_RESOLUTION: newOperationId=%s recordId=%s localVersion=%d",
+                    newOperationId, record.getId(), record.getLocalVersion()));
+
+            // Sync with forced NORMAL mode (mock must not modify record further)
+            MockSyncService.Mode oldMode = mockSyncService.getCurrentMode();
+            mockSyncService.setCurrentMode(MockSyncService.Mode.NORMAL);
+            try {
+                MockSyncService.AckResponse ack;
+                try {
+                    ack = mockSyncService.syncForcedNormal(record);
+                } catch (MockSyncService.SyncException e) {
+                    // Should not happen in NORMAL mode, but handle gracefully
+                    Log.e(TAG, "Unexpected error in conflict resolution forced sync", e);
+                    handleTransientFailure(record, "Conflict resolution sync failed: " + e.getMessage());
+                    return;
+                }
+                if (mockSyncService.validateAck(ack, record.getOperationId())) {
+                    handleSuccess(record, ack);
+                } else {
+                    handleMalformedAck(record);
+                }
+            } finally {
+                mockSyncService.setCurrentMode(oldMode);
             }
         });
     }

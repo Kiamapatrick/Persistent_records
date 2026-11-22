@@ -92,7 +92,7 @@ Tests:
 |-----------|---------|
 | Android Studio | [Fill in] |
 | AGP | 9.5.1 |
-| Gradle | [Fill in] |
+| Gradle | 9.6.0 |
 | minSdk | 24 |
 | targetSdk | 37 |
 | compileSdk | 37 |
@@ -109,9 +109,10 @@ Tests:
 
 ### Timeout ≠ Rejection
 In `LOST_RESPONSE` mode, the server **does** commit but the response is lost.
-- Client sees timeout (transient failure)
+- Saving a record is **local only** (state = `PENDING`, no auto-sync)
+- User taps **Sync Pending** → client sees timeout (transient failure)
 - Record state = `FAILED`, `attemptCount` incremented, `operationId` **reused**
-- Retry with same `operationId` returns stored ack - **server count unchanged**
+- Retry with same `operationId` (Sync Pending again in NORMAL mode) returns stored ack - **server count unchanged**
 
 ### Data Surviving Process Restart
 All `ReadingRecord` fields in Room survive:

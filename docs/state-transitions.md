@@ -24,6 +24,18 @@ SAVED_LOCAL  →  PENDING  →  ACKNOWLEDGED
 | FAILED | ACKNOWLEDGED | Retry succeeds (valid ACK) | Same | Same | Same | From ACK |
 | CONFLICT | PENDING | "Keep my version" action | **NEW UUID** | 0 | +1 | Same |
 
+## Version numbers in the CONFLICT scenario
+
+| Step | Description | serverVersion (mock) | client serverVersion | client localVersion | operationId |
+|------|-------------|---------------------|---------------------|---------------------|-------------|
+| 1 | First save + sync (NORMAL) | 1 | 1 | 1 | op-1 |
+| 2 | Edit record (new operationId) | 1 | 1 | 2 | op-2 |
+| 3 | Sync in CONFLICT mode | 2 (bumped by mock) | 2 (from conflict) | 2 | op-2 |
+| 4 | Resolve: "Keep my version" | 2 | 2 | 3 (incremented) | op-3 (new) |
+| 5 | Sync resolution (forced NORMAL) | 3 | 3 | 3 | op-3 |
+
+The CONFLICT response itself increments the mock's internal server version counter (to 2). The resolved ACK then increments it again (to 3).
+
 ## Text Diagram
 
 ```

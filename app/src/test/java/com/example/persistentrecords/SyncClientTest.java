@@ -127,13 +127,18 @@ public class SyncClientTest {
         MockSyncService.AckResponse ack = mockSyncService.syncRecord(record);
 
         assertEquals("CONFLICT", ack.status);
+        // Capture knownServerVersion before setting new one (same as SyncClient.handleConflict fix)
+        int knownServerVersion = record.getServerVersion();
         record.setSyncState(ReadingRecord.STATE_CONFLICT);
         record.setServerVersion(ack.serverVersion);
-        record.setLastError("Conflict: server version " + ack.serverVersion + " > local version 1");
+        record.setLastError(String.format("Conflict: server has v%d, client last saw v%d",
+                ack.serverVersion, knownServerVersion));
 
         assertEquals(ReadingRecord.STATE_CONFLICT, record.getSyncState());
         assertTrue(record.getServerVersion() > 1);
         assertNotNull(record.getLastError());
+        assertEquals("Conflict: server has v" + ack.serverVersion + ", client last saw v" + knownServerVersion,
+                record.getLastError());
     }
 
     @Test
@@ -147,12 +152,43 @@ public class SyncClientTest {
 
         mockSyncService.setCurrentMode(MockSyncService.Mode.NORMAL);
         String oldOpId = record.getOperationId();
-        MockSyncService.AckResponse resolutionAck = mockSyncService.resolveConflictKeepLocal(record);
+        int oldLocalVersion = record.getLocalVersion();
+
+        // Simulate new client-side behavior: prepare record before calling mock
+        record.setOperationId(UUID.randomUUID().toString());
+        record.setAttemptCount(0);
+        record.setLastError(null);
+        record.setSyncState(ReadingRecord.STATE_PENDING);
+        record.setLocalVersion(oldLocalVersion + 1);
+
+        MockSyncService.AckResponse resolutionAck = mockSyncService.syncForcedNormal(record);
 
         assertNotEquals(oldOpId, record.getOperationId());
         assertEquals(resolutionAck.operationId, record.getOperationId());
         assertEquals("ACK", resolutionAck.status);
-        // Note: resolveConflictKeepLocal sets state to ACKNOWLEDGED internally
+        assertEquals(oldLocalVersion + 1, record.getLocalVersion());
+    }
+
+    @Test
+    public void conflictResolution_syncForcedNormalUsesExistingOperationId() throws Exception {
+        // Test that syncForcedNormal does NOT generate a new operationId or modify the record
+        // beyond processing the sync - it uses the record's existing operationId
+        mockSyncService.setCurrentMode(MockSyncService.Mode.NORMAL);
+        ReadingRecord record = createRecord("rec-1", "op-resolve-123");
+        record.setSyncState(ReadingRecord.STATE_PENDING);
+        record.setLocalVersion(2); // Already incremented by client
+        record.setAttemptCount(0);
+        record.setLastError(null);
+
+        String beforeOpId = record.getOperationId();
+        int beforeLocalVersion = record.getLocalVersion();
+
+        MockSyncService.AckResponse ack = mockSyncService.syncForcedNormal(record);
+
+        assertEquals("ACK", ack.status);
+        assertEquals(beforeOpId, record.getOperationId()); // Unchanged
+        assertEquals(beforeLocalVersion, record.getLocalVersion()); // Unchanged
+        assertEquals(beforeOpId, ack.operationId); // ACK has same operationId
     }
 
     @Test

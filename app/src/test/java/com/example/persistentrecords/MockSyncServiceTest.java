@@ -213,17 +213,65 @@ public class MockSyncServiceTest {
         MockSyncService.AckResponse conflictAck = service.syncRecord(record);
         assertEquals("CONFLICT", conflictAck.status);
 
-        // Now resolve with "Keep my version"
+        // Now resolve with "Keep my version" (legacy deprecated method)
         // Switch to NORMAL mode for resolution
         service.setCurrentMode(MockSyncService.Mode.NORMAL);
         MockSyncService.AckResponse resolutionAck = service.resolveConflictKeepLocal(record);
 
-        // Should have NEW operationId
+        // Should have NEW operationId (legacy behavior)
         assertNotEquals("op-conflict", record.getOperationId());
         assertEquals("ACK", resolutionAck.status);
         assertEquals(record.getOperationId(), resolutionAck.operationId);
         // Same recordId - should NOT increase server count (overwrites existing)
         assertEquals(1, service.getServerRecordCount());
+    }
+
+    @Test
+    public void syncForcedNormal_usesExistingOperationIdAndDoesNotModifyRecord() throws Exception {
+        // Test that syncForcedNormal uses the record's existing operationId and doesn't modify the record
+        service.setCurrentMode(MockSyncService.Mode.NORMAL);
+        ReadingRecord record = createRecord("op-resolve-123");
+        record.setSyncState(ReadingRecord.STATE_PENDING);
+        record.setLocalVersion(2); // Already incremented by client
+        record.setAttemptCount(0);
+        record.setLastError(null);
+
+        String beforeOpId = record.getOperationId();
+        int beforeLocalVersion = record.getLocalVersion();
+        int beforeAttemptCount = record.getAttemptCount();
+
+        MockSyncService.AckResponse ack = service.syncForcedNormal(record);
+
+        assertEquals("ACK", ack.status);
+        assertEquals(beforeOpId, record.getOperationId()); // Unchanged
+        assertEquals(beforeLocalVersion, record.getLocalVersion()); // Unchanged
+        assertEquals(beforeAttemptCount, record.getAttemptCount()); // Unchanged
+        assertEquals(beforeOpId, ack.operationId); // ACK has same operationId
+        // Server count increases because it's a new operationId not seen before
+        assertEquals(1, service.getServerRecordCount());
+    }
+
+    @Test
+    public void syncForcedNormal_idempotentOnRetry() throws Exception {
+        // Test that syncForcedNormal is idempotent - retry with same operationId returns stored ack
+        service.setCurrentMode(MockSyncService.Mode.NORMAL);
+        ReadingRecord record = createRecord("op-idempotent");
+        record.setSyncState(ReadingRecord.STATE_PENDING);
+        record.setLocalVersion(1);
+        record.setAttemptCount(0);
+        record.setLastError(null);
+
+        // First call
+        MockSyncService.AckResponse ack1 = service.syncForcedNormal(record);
+        int countAfterFirst = service.getServerRecordCount();
+
+        // Retry with SAME operationId (simulating transient failure retry)
+        MockSyncService.AckResponse ack2 = service.syncForcedNormal(record);
+        int countAfterRetry = service.getServerRecordCount();
+
+        assertEquals(ack1.operationId, ack2.operationId);
+        assertEquals(ack1.serverVersion, ack2.serverVersion);
+        assertEquals(countAfterFirst, countAfterRetry); // No duplicate
     }
 
     @Test
