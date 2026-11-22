@@ -235,7 +235,7 @@ public class MainActivity extends AppCompatActivity implements
                     String operationId = UUID.randomUUID().toString();
                     record = new ReadingRecord(id, siteName, readingType, value, unit, notes,
                             now, now, ReadingRecord.STATE_PENDING, operationId, 0, null, 0, 1);
-                    EvidenceLog.getInstance().log(TAG, "SAVE_COMMIT: New record id=" + id + " operationId=" + operationId);
+                    EvidenceLog.getInstance().log(TAG, "SAVE_ATTEMPT: New record id=" + id + " operationId=" + operationId);
                 } else {
                     // Editing existing record - increment localVersion, NEW operationId, state back to PENDING
                     String newOperationId = UUID.randomUUID().toString();
@@ -244,7 +244,7 @@ public class MainActivity extends AppCompatActivity implements
                             currentRecord.getRecordedAt(), now,
                             ReadingRecord.STATE_PENDING, newOperationId, 0, null,
                             currentRecord.getServerVersion(), currentRecord.getLocalVersion() + 1);
-                    EvidenceLog.getInstance().log(TAG, "SAVE_COMMIT: Edit record id=" + record.getId() +
+                    EvidenceLog.getInstance().log(TAG, "SAVE_ATTEMPT: Edit record id=" + record.getId() +
                             " newOperationId=" + newOperationId + " localVersion=" + record.getLocalVersion());
                 }
 
@@ -299,12 +299,13 @@ public class MainActivity extends AppCompatActivity implements
         binding.etNotes.setText("");
         binding.btnSave.setText("Save Reading");
         binding.tvFormStatus.setVisibility(View.GONE);
+        validateFormFields();
         // Clear field errors so a freshly cleared form shows no red errors
+        // (must be after validateFormFields so errors from validation are not immediately overwritten)
         binding.tilSiteName.setError(null);
         binding.tilReadingType.setError(null);
         binding.tilValue.setError(null);
         binding.tilNotes.setError(null);
-        validateFormFields();
     }
 
     private void loadRecords() {

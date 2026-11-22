@@ -43,7 +43,7 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | 2B.1 | Enable **Simulate local write failure** switch | Toast: "TEST HOOK ENABLED" | |
 | 2B.2 | Fill valid form (Site="Valid Site", Temp=25) | Form validates, Save enabled | |
 | 2B.3 | Tap Save | Error toast "Save failed: TEST HOOK...", **draft stays in form** | |
-| 2B.4 | Check Evidence Log | `SAVE_FAILED: ... error=TEST HOOK...` | |
+| 2B.4 | Check Evidence Log | `SAVE_FAILED: ... error=TEST HOOK...`. Evidence Log shows `SAVE_ATTEMPT` then `SAVE_FAILED` and **NO `SAVE_COMMIT` line** for this attempt. | |
 | 2B.5 | Disable switch, tap Save again | Green status text under Save button and a short toast: "Saved on this device (pending sync)" | |
 
 #### 2C: Reopen and Correct a Record
@@ -52,7 +52,7 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | 2C.1 | Tap a listed record | Form loads with record data; Save button reads "Update Reading" | |
 | 2C.2 | Change the value | Form shows updated value; Save enabled | |
 | 2C.3 | Tap **Update Reading** | List shows the new value, record state = PENDING | |
-| 2C.4 | Check Evidence Log | `RECORD_OPENED_FOR_EDIT: recordId=... syncState=... localVersion=...` then `SAVE_COMMIT: Edit record ... newOperationId=... localVersion=2` | |
+| 2C.4 | Check Evidence Log | `RECORD_OPENED_FOR_EDIT: recordId=... syncState=... localVersion=...` then `SAVE_ATTEMPT: Edit record ... newOperationId=... localVersion=2` | |
 
 **Type**: Real observation (form state preserved, no data loss)
 
@@ -177,6 +177,7 @@ Each check includes steps, expected result, and evidence column for screenshots/
 - **Real observations** = On-device Room persistence, process restart, form behavior, UI state
 - **Mock outcomes** = Server record count, idempotency, conflict responses (deterministic, in-memory)
 - **Do NOT fake observations** - leave blank if not yet captured
+- **A conflict record is not picked up by Sync Pending; it can only be resolved from the conflict dialog, so do not tap Cancel during Check 4B.**
 - Run on: [Emulator API ___ / Physical device ________________]
 - Date: ________________
 - Tester: ________________
