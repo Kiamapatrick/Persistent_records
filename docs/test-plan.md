@@ -33,9 +33,9 @@ Each check includes steps, expected result, and evidence column for screenshots/
 #### 2A: Validation Rejection
 | Step | Action | Expected Result | Observed / Evidence ID |
 |------|--------|-----------------|------------------------|
-| 2A.1 | Clear form, enter Site="Ab" (too short), Value=25 | Site field shows error "at least 3 characters" | |
-| 2A.2 | Tap Save | **No success message**, form **unchanged** (draft kept) | |
-| 2A.3 | Check Evidence Log | `VALIDATION_REJECTED: Site name must be at least 3 characters` | |
+| 2A.1 | Fresh app launch, type nothing, tap **Save** | Inline required-field errors appear; status text under Save button shows "Validation failed - check fields"; **no** success message; Save button remains disabled | |
+| 2A.2 | Check Evidence Log | `VALIDATION_REJECTED: Site name is required` | |
+| 2A.3 | Type "Ab" in Site name and 25 in Value | Inline error "Site name must be at least 3 characters" appears; Save button is **disabled** (second line of defence; `VALIDATION_REJECTED` is only logged when Save is tapped on a pristine form before real-time validation has run) | |
 
 #### 2B: Simulated Write Failure (Test Hook)
 | Step | Action | Expected Result | Observed / Evidence ID |
@@ -44,7 +44,15 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | 2B.2 | Fill valid form (Site="Valid Site", Temp=25) | Form validates, Save enabled | |
 | 2B.3 | Tap Save | Error toast "Save failed: TEST HOOK...", **draft stays in form** | |
 | 2B.4 | Check Evidence Log | `SAVE_FAILED: ... error=TEST HOOK...` | |
-| 2B.5 | Disable switch, tap Save again | Success: "Saved on this device (pending sync)" | |
+| 2B.5 | Disable switch, tap Save again | Green status text under Save button and a short toast: "Saved on this device (pending sync)" | |
+
+#### 2C: Reopen and Correct a Record
+| Step | Action | Expected Result | Observed / Evidence ID |
+|------|--------|-----------------|------------------------|
+| 2C.1 | Tap a listed record | Form loads with record data; Save button reads "Update Reading" | |
+| 2C.2 | Change the value | Form shows updated value; Save enabled | |
+| 2C.3 | Tap **Update Reading** | List shows the new value, record state = PENDING | |
+| 2C.4 | Check Evidence Log | `RECORD_OPENED_FOR_EDIT: recordId=... syncState=... localVersion=...` then `SAVE_COMMIT: Edit record ... newOperationId=... localVersion=2` | |
 
 **Type**: Real observation (form state preserved, no data loss)
 
@@ -56,8 +64,8 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | Step | Action | Expected Result | Observed / Evidence ID |
 |------|--------|-----------------|------------------------|
 | 3.1 | Set Mock Mode = **LOST_RESPONSE** | Mode shows LOST_RESPONSE | |
-| 3.2 | Save a new record (Site="Retry Test", Temperature, 20). Expect "Saved on this device (pending sync)", state PENDING (saving never auto-syncs). | | |
-| 3.3 | Tap **Sync Pending**. Expect state FAILED, attemptCount=1, error "Request timeout (response lost)". Evidence log: `SYNC_LOST_RESPONSE` then `SYNC_TRANSIENT_FAILURE`. | | |
+| 3.2 | Save a new record (Site="Retry Test", Temperature, 20). Expect green status text under the Save button and a short toast: "Saved on this device (pending sync)", state PENDING (saving never auto-syncs). | | |
+| 3.3 | Tap **Sync Pending**. Expect state FAILED. The list card shows only site, type, value+unit, sync-state badge and updated time; `attemptCount` and `lastError` are observed in the Evidence Log lines (`SYNC_TRANSIENT_FAILURE ... attempt=1 error=Request timeout (response lost)`). Evidence log: `SYNC_LOST_RESPONSE` then `SYNC_TRANSIENT_FAILURE`. | | |
 | 3.4 | Note Mock server record count = 1 (the server committed even though the client saw a timeout). | | |
 | 3.5 | Do NOT edit the record (an edit creates a new operationId and would skip the dedupe). Note the record's operationId. | | |
 | 3.6 | Mock Mode = **NORMAL**, tap **Sync Pending**. | | |
@@ -75,18 +83,18 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | Step | Action | Expected Result | Observed / Evidence ID |
 |------|--------|-----------------|------------------------|
 | 4A.1 | Set Mock Mode = **MALFORMED_ACK** | Mode shows MALFORMED_ACK | |
-| 4A.2 | Save new record (Site="Malformed Test", Temp=22) | Record saved locally (PENDING) | |
-| 4A.3 | Tap **Sync Pending** | Record state = FAILED, error = "Malformed acknowledgement" | |
+| 4A.2 | Save new record (Site="Malformed Test", Temp=22). Expect green status text under the Save button and a short toast: "Saved on this device (pending sync)", state PENDING. | | |
+| 4A.3 | Tap **Sync Pending** | Record state = FAILED. The list card shows only site, type, value+unit, sync-state badge and updated time; `attemptCount` and `lastError` are observed in the Evidence Log lines (`SYNC_TRANSIENT_FAILURE ... attempt=1 error=Malformed acknowledgement`). | |
 | 4A.4 | Verify **NO "Synced" / "Acknowledged" message** | Sync status shows failed count | |
 | 4A.5 | Check Evidence Log | `SYNC_MALFORMED_ACK` then `SYNC_TRANSIENT_FAILURE` (malformed treated as transient) | |
 
 #### 4B: Conflict
 | Step | Action | Expected Result | Observed / Evidence ID |
 |------|--------|-----------------|------------------------|
-| 4B.1 | Set Mock Mode = **NORMAL**, save record (Site="Conflict Test", Temp=15) | Record ACKNOWLEDGED, serverVersion=1 | |
+| 4B.1 | Set Mock Mode = **NORMAL**, save record (Site="Conflict Test", Temp=15). Expect green status text under the Save button and a short toast: "Saved on this device (pending sync)", state ACKNOWLEDGED, serverVersion=1. | | |
 | 4B.2 | Set Mock Mode = **CONFLICT** | Mode shows CONFLICT | |
 | 4B.3 | Edit same record (change value to 16), Save | New operationId, state = PENDING | |
-| 4B.4 | Tap **Sync Pending** | Conflict dialog appears: "Server has newer version..." | |
+| 4B.4 | Tap **Sync Pending** | Conflict dialog appears with message from `record.getLastError()` + server/local version details | |
 | 4B.5 | Choose **"Keep My Version (New Operation)"** | New sync with NEW operationId, succeeds | |
 | 4B.6 | Verify record state = ACKNOWLEDGED, serverVersion=3 | Updated record acknowledged | |
 | 4B.7 | Check Evidence Log | `SYNC_CONFLICT` then `CONFLICT_RESOLUTION` then `SYNC_ACK` | |
@@ -105,7 +113,7 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | Step | Action | Expected | Evidence |
 |------|--------|----------|----------|
 | 1 | Mock Mode = NORMAL | | |
-| 2 | Save record | "Saved on this device (pending sync)" | |
+| 2 | Save record | Green status text under the Save button and a short toast: "Saved on this device (pending sync)" | |
 | 3 | Sync Pending | Record → ACKNOWLEDGED, green badge | `SYNC_ACK` |
 | 4 | Server count = 1 | | |
 
@@ -113,15 +121,15 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | Step | Action | Expected | Evidence |
 |------|--------|----------|----------|
 | 1 | Mock Mode = UNAVAILABLE | | |
-| 2 | Save record | Local PENDING/FAILED | |
-| 3 | Sync Pending | FAILED, attemptCount=1, error=503 | `SYNC_TRANSIENT_FAILURE` |
+| 2 | Save record | Green status text under the Save button and a short toast: "Saved on this device (pending sync)", state PENDING | |
+| 3 | Sync Pending | FAILED. The list card shows only site, type, value+unit, sync-state badge and updated time; `attemptCount` and `lastError` are observed in the Evidence Log lines (`SYNC_TRANSIENT_FAILURE ... attempt=1 error=Service unavailable (HTTP 503)`). | `SYNC_TRANSIENT_FAILURE` |
 | 4 | Switch to NORMAL, Sync again | Retry with same operationId → ACK | `SYNC_RETRY_DEDUPED` |
 
 ### Lost Response Retry (Idempotency)
 | Step | Action | Expected | Evidence |
 |------|--------|----------|----------|
 | 1 | Mock Mode = LOST_RESPONSE | | |
-| 2 | Save record | "Saved on this device (pending sync)", state PENDING | |
+| 2 | Save record | Green status text under the Save button and a short toast: "Saved on this device (pending sync)", state PENDING | |
 | 3 | Tap **Sync Pending** | Timeout, state FAILED | `SYNC_LOST_RESPONSE` → `SYNC_TRANSIENT_FAILURE` |
 | 4 | Server count = 1 | | |
 | 5 | Switch to NORMAL, tap **Sync Pending** | Retry → stored ACK, no duplicate | `SYNC_RETRY_DEDUPED` → `SYNC_ACK` |
@@ -152,6 +160,7 @@ Each check includes steps, expected result, and evidence column for screenshots/
 - [ ] Check 1: Offline persistence verified
 - [ ] Check 2A: Validation rejection preserves draft
 - [ ] Check 2B: Simulated write failure preserves draft
+- [ ] Check 2C: Reopen and correct a record
 - [ ] Check 3: LOST_RESPONSE retry no duplicate
 - [ ] Check 4A: Malformed ACK not success
 - [ ] Check 4B: Conflict not success, resolution works

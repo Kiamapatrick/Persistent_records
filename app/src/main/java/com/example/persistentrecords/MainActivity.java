@@ -103,11 +103,14 @@ public class MainActivity extends AppCompatActivity implements
         setupRecyclerView();
         setupFab();
 
+        // Log app start with record count (run on executor before async load)
+        executor.execute(() -> {
+            int n = dao.getRecordCount();
+            EvidenceLog.getInstance().log(TAG, "APP_START: Loaded " + n + " records from Room");
+        });
+
         // Load initial data
         loadRecords();
-
-        // Log app start with record count
-        EvidenceLog.getInstance().log(TAG, "APP_START: Loaded " + adapter.getItemCount() + " records from Room");
     }
 
     private void setupReadingTypeSpinner() {
@@ -254,9 +257,10 @@ public class MainActivity extends AppCompatActivity implements
 
                 runOnUiThread(() -> {
                     // Only show success AFTER transaction committed
-                    showFormStatus("Saved on this device (pending sync)", false);
-                    EvidenceLog.getInstance().log(TAG, "SAVE_COMMIT: Transaction committed for recordId=" + record.getId());
                     clearForm();
+                    showFormStatus("Saved on this device (pending sync)", false);
+                    Toast.makeText(MainActivity.this, "Saved on this device (pending sync)", Toast.LENGTH_SHORT).show();
+                    EvidenceLog.getInstance().log(TAG, "SAVE_COMMIT: Transaction committed for recordId=" + record.getId());
                     loadRecords();
                     updateServerCountDisplay();
                 });
@@ -295,6 +299,11 @@ public class MainActivity extends AppCompatActivity implements
         binding.etNotes.setText("");
         binding.btnSave.setText("Save Reading");
         binding.tvFormStatus.setVisibility(View.GONE);
+        // Clear field errors so a freshly cleared form shows no red errors
+        binding.tilSiteName.setError(null);
+        binding.tilReadingType.setError(null);
+        binding.tilValue.setError(null);
+        binding.tilNotes.setError(null);
         validateFormFields();
     }
 
