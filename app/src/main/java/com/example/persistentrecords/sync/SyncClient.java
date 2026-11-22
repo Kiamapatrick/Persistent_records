@@ -3,6 +3,7 @@ package com.example.persistentrecords.sync;
 import android.util.Log;
 
 import com.example.persistentrecords.dao.ReadingDao;
+import com.example.persistentrecords.log.EvidenceLog;
 import com.example.persistentrecords.model.ReadingRecord;
 
 import java.util.ArrayList;
@@ -49,7 +50,7 @@ public class SyncClient {
             pendingStates.add(ReadingRecord.STATE_FAILED);
 
             List<ReadingRecord> records = dao.getRecordsBySyncStates(pendingStates);
-            Log.i(TAG, String.format("SYNC_ATTEMPT: Found %d records to sync", records.size()));
+            EvidenceLog.getInstance().log(TAG, String.format("SYNC_ATTEMPT: Found %d records to sync", records.size()));
 
             int processed = 0;
             int succeeded = 0;
@@ -106,6 +107,7 @@ public class SyncClient {
         } catch (Exception e) {
             // Unexpected error - treat as transient
             Log.e(TAG, "SYNC_TRANSIENT_FAILURE: Unexpected error", e);
+            EvidenceLog.getInstance().log(TAG, "SYNC_TRANSIENT_FAILURE: Unexpected error: " + e.getMessage());
             handleTransientFailure(record, "Unexpected error: " + e.getMessage());
         }
     }
@@ -119,7 +121,7 @@ public class SyncClient {
 
         dao.update(record);
 
-        Log.i(TAG, String.format("SYNC_ACK: operationId=%s recordId=%s serverVersion=%d",
+        EvidenceLog.getInstance().log(TAG, String.format("SYNC_ACK: operationId=%s recordId=%s serverVersion=%d",
                 record.getOperationId(), record.getId(), ack.serverVersion));
 
         if (callback != null) {
@@ -136,7 +138,7 @@ public class SyncClient {
 
         dao.update(record);
 
-        Log.i(TAG, String.format("SYNC_TRANSIENT_FAILURE: operationId=%s recordId=%s attempt=%d error=%s",
+        EvidenceLog.getInstance().log(TAG, String.format("SYNC_TRANSIENT_FAILURE: operationId=%s recordId=%s attempt=%d error=%s",
                 record.getOperationId(), record.getId(), record.getAttemptCount(), errorMessage));
 
         if (callback != null) {
@@ -151,7 +153,7 @@ public class SyncClient {
 
         dao.update(record);
 
-        Log.i(TAG, String.format("SYNC_PERMANENT_FAILURE: operationId=%s recordId=%s error=%s",
+        EvidenceLog.getInstance().log(TAG, String.format("SYNC_PERMANENT_FAILURE: operationId=%s recordId=%s error=%s",
                 record.getOperationId(), record.getId(), errorMessage));
 
         if (callback != null) {
@@ -172,7 +174,7 @@ public class SyncClient {
 
         dao.update(record);
 
-        Log.i(TAG, String.format("SYNC_CONFLICT: operationId=%s recordId=%s serverVersion=%d knownServerVersion=%d localVersion=%d",
+        EvidenceLog.getInstance().log(TAG, String.format("SYNC_CONFLICT: operationId=%s recordId=%s serverVersion=%d knownServerVersion=%d localVersion=%d",
                 record.getOperationId(), record.getId(), ack.serverVersion, knownServerVersion, record.getLocalVersion()));
 
         if (callback != null) {
@@ -191,7 +193,7 @@ public class SyncClient {
 
         dao.update(record);
 
-        Log.i(TAG, String.format("SYNC_MALFORMED_ACK: operationId=%s recordId=%s",
+        EvidenceLog.getInstance().log(TAG, String.format("SYNC_MALFORMED_ACK: operationId=%s recordId=%s",
                 record.getOperationId(), record.getId()));
 
         if (callback != null) {
@@ -216,7 +218,7 @@ public class SyncClient {
 
             dao.update(record);
 
-            Log.i(TAG, String.format("CONFLICT_RESOLUTION: newOperationId=%s recordId=%s localVersion=%d",
+            EvidenceLog.getInstance().log(TAG, String.format("CONFLICT_RESOLUTION: newOperationId=%s recordId=%s localVersion=%d",
                     newOperationId, record.getId(), record.getLocalVersion()));
 
             // Sync with forced NORMAL mode (mock must not modify record further)
@@ -229,6 +231,7 @@ public class SyncClient {
                 } catch (MockSyncService.SyncException e) {
                     // Should not happen in NORMAL mode, but handle gracefully
                     Log.e(TAG, "Unexpected error in conflict resolution forced sync", e);
+                    EvidenceLog.getInstance().log(TAG, "Unexpected error in conflict resolution forced sync: " + e.getMessage());
                     handleTransientFailure(record, "Conflict resolution sync failed: " + e.getMessage());
                     return;
                 }

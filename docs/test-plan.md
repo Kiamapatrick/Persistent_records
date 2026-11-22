@@ -141,6 +141,8 @@ Each check includes steps, expected result, and evidence column for screenshots/
 | Server count | tvServerCount TextView | Screenshot debug card |
 | Conflict dialog | AlertDialog | Screenshot conflict dialog |
 
+> **Note**: Sync events (`SYNC_*`, `[MOCK] ...`) now appear in the in-app Evidence Log as well as Logcat (tag HM8). Tap **Clear** on the Evidence Log screen before each check so each check's screenshot starts at E1; cite evidence as `Check N / En`.
+
 ---
 
 ## Test Execution Checklist

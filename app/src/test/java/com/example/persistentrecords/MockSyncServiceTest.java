@@ -204,29 +204,6 @@ public class MockSyncServiceTest {
     }
 
     @Test
-    public void resolveConflictKeepLocal_createsNewOperationId() throws Exception {
-        service.setCurrentMode(MockSyncService.Mode.CONFLICT);
-        ReadingRecord record = createRecord("op-conflict");
-        record.setServerVersion(5);
-
-        // First get conflict
-        MockSyncService.AckResponse conflictAck = service.syncRecord(record);
-        assertEquals("CONFLICT", conflictAck.status);
-
-        // Now resolve with "Keep my version" (legacy deprecated method)
-        // Switch to NORMAL mode for resolution
-        service.setCurrentMode(MockSyncService.Mode.NORMAL);
-        MockSyncService.AckResponse resolutionAck = service.resolveConflictKeepLocal(record);
-
-        // Should have NEW operationId (legacy behavior)
-        assertNotEquals("op-conflict", record.getOperationId());
-        assertEquals("ACK", resolutionAck.status);
-        assertEquals(record.getOperationId(), resolutionAck.operationId);
-        // Same recordId - should NOT increase server count (overwrites existing)
-        assertEquals(1, service.getServerRecordCount());
-    }
-
-    @Test
     public void syncForcedNormal_usesExistingOperationIdAndDoesNotModifyRecord() throws Exception {
         // Test that syncForcedNormal uses the record's existing operationId and doesn't modify the record
         service.setCurrentMode(MockSyncService.Mode.NORMAL);

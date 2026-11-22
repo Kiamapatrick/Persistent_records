@@ -372,13 +372,11 @@ public class MainActivity extends AppCompatActivity implements
     private void showConflictDialog(ReadingRecord record) {
         new androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("Sync Conflict")
-                .setMessage("Server has newer version (v" + record.getServerVersion() +
-                        ") than your local version (v" + record.getLocalVersion() + ").\n\n" +
-                        "Choose how to resolve:")
+                .setMessage(record.getLastError() + "\n\nServer record is at v" + record.getServerVersion() + ". Your edit is local #" + record.getLocalVersion() + ".\n\nChoose how to resolve:")
                 .setPositiveButton("Keep My Version (New Operation)", (dialog, which) -> {
                     // This creates a NEW operationId and re-queues as PENDING
+                    // SyncClient.resolveConflictKeepLocal now logs CONFLICT_RESOLUTION with the new operationId
                     syncClient.resolveConflictKeepLocal(record);
-                    EvidenceLog.getInstance().log(TAG, "CONFLICT_RESOLUTION: Keep local, new operationId for recordId=" + record.getId());
                 })
                 .setNegativeButton("Cancel", null)
                 .show();

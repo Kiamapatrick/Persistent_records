@@ -2,11 +2,11 @@ package com.example.persistentrecords.sync;
 
 import android.util.Log;
 
+import com.example.persistentrecords.log.EvidenceLog;
 import com.example.persistentrecords.model.ReadingRecord;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -27,11 +27,14 @@ public class MockSyncService {
         void e(String tag, String message, Throwable t);
     }
 
-    // Default Android logger
+    // Default Android logger - forwards to EvidenceLog (which also writes to Logcat under HM8)
     private static final Logger DEFAULT_LOGGER = new Logger() {
-        @Override public void i(String tag, String message) { Log.i(tag, message); }
-        @Override public void w(String tag, String message) { Log.w(tag, message); }
-        @Override public void e(String tag, String message, Throwable t) { Log.e(tag, message, t); }
+        @Override public void i(String tag, String message) { EvidenceLog.getInstance().log(tag, message); }
+        @Override public void w(String tag, String message) { EvidenceLog.getInstance().log(tag, message); }
+        @Override public void e(String tag, String message, Throwable t) {
+            EvidenceLog.getInstance().log(tag, message);
+            Log.e(tag, message, t);
+        }
     };
 
     // No-op logger for unit tests
@@ -262,35 +265,6 @@ public class MockSyncService {
 
         // Use NORMAL mode logic directly without touching record fields
         return handleNormalMode(record);
-    }
-
-    /**
-     * For CONFLICT resolution: "Keep my version" - client must prepare record first.
-     * This method is DEPRECATED - use syncForcedNormal after client sets new operationId, localVersion+1, etc.
-     * Kept for backward compatibility with tests.
-     */
-    @Deprecated
-    public AckResponse resolveConflictKeepLocal(ReadingRecord record) {
-        // Generate NEW operationId for this resolution (legacy behavior)
-        String newOperationId = UUID.randomUUID().toString();
-        record.setOperationId(newOperationId);
-        record.setAttemptCount(0);
-        record.setLastError(null);
-        record.setSyncState(ReadingRecord.STATE_PENDING);
-        // Note: legacy behavior does NOT increment localVersion
-
-        // Now sync with NORMAL mode logic (force normal for resolution)
-        Mode oldMode = currentMode;
-        currentMode = Mode.NORMAL;
-        try {
-            return syncRecord(record);
-        } catch (SyncException e) {
-            // Should not happen in NORMAL mode, but handle gracefully
-            Log.e(TAG, "Unexpected error in conflict resolution", e);
-            throw new RuntimeException(e);
-        } finally {
-            currentMode = oldMode;
-        }
     }
 
     // --- Data classes ---
